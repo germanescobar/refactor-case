@@ -1,0 +1,24 @@
+{
+  "name": "refactor-case",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+  },
+  "bin": {
+    "refactor-case": "./cli.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "change-case": "~5.1.2",
+    "commander": "~11.1.0",
+    "typescript": "~5.2.2"
+  },
+  "devDependencies": {
+    "jest": "~29.7.0"
+  }
+}
