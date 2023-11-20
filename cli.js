@@ -1,3 +1,5 @@
+#! /usr/bin/env node
+
 import { program } from 'commander'
 import * as url from 'url'
 import refactorFilesCase from './index.js'
@@ -13,24 +15,36 @@ async function run() {
 
   program.parse()
 
-  const options = program.opts()
-  const newCase = options.to
-  const path = options.path || ''
+  const opts = program.opts()
+  const newCase = opts.to
+  const path = opts.path || ''
 
   if (!process.argv.slice(2).length) {
     program.outputHelp()
     return
   }
 
+  const options = {
+    directory: false,
+    recursive: false,
+    dryRun: false
+  }
+  if (opts.path) options.path = opts.path
+  if (opts.directory) options.directory = true
+  if (opts.recursive) options.recursive = true
+  if (opts.dryRun) options.dryRun = true
+
   try {
-    const projectPath = url.fileURLToPath(new URL('.', import.meta.url));
-    const result = await refactorFilesCase(newCase, projectPath, path)
+    const rootPath = url.fileURLToPath(new URL('.', import.meta.url));
+    const result = await refactorFilesCase(newCase, rootPath, options)
     if (Array.isArray(result)) {
       const count = result.filter(e => e).length
-      console.log(`${count} files refactored`)
+      if (!options.dryRun) console.log(`${count} files refactored`)
     } else {
-      console.log(`${result ? 1 : 0} files refactored`)
+      if (!options.dryRun) console.log(`${result ? 1 : 0} files refactored`)
     }
+
+    if (options.dryRun) console.log('This was a dry run. No files changed!')
   } catch (e) {
     console.log(e)
   }

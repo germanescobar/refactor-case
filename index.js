@@ -8,10 +8,11 @@ import { camelCase, kebabCase, pascalCase, snakeCase } from "change-case";
  * 
  * @param {string} newCase - The case you want to change the files to (camel, snake, kebab, pascal).
  * @param {string} projectPath - The path to the project (absolute or relative).
- * @param {string} fileOrFolderPath - The path to the file or folder relative to the projectPath. Defaults to '/'.
+ * @param {object} options - Options
  * @returns {Promise}
  */
-export default async function refactorFilesCase(newCase, projectPath, fileOrFolderPath='/') {
+export default async function refactorFilesCase(newCase, projectPath, options) {
+  const fileOrFolderPath = options.path || '/'
   const fullPath = path.join(projectPath, fileOrFolderPath)
   const stat = await fs.promises.stat(fullPath)
 
@@ -21,11 +22,11 @@ export default async function refactorFilesCase(newCase, projectPath, fileOrFold
     const files = await fs.promises.readdir(fullPath)
     const promises = []
     files.forEach((file) => {
-      promises.push(refactorFileCase(caseFn, projectPath, file))
+      promises.push(refactorFileCase(caseFn, projectPath, file, options))
     })
     return Promise.all(promises)
   } else {
-    return refactorFileCase(caseFn, projectPath, fileOrFolderPath)
+    return refactorFileCase(caseFn, projectPath, fileOrFolderPath, options)
   }
 }
 
@@ -43,34 +44,72 @@ function getCaseFn(newCase) {
   throw new Error(`Case "${newCase}" is not valid, possible values are: camel, snake, kebab, pascal`)
 }
 
-async function refactorFileCase(caseFn, projectPath, file) {
+async function refactorFileCase(caseFn, projectPath, file, options) {
   if (file.endsWith('.ts')) {
     const oldFilePath = path.join(projectPath, file)
     const newFileName = caseFn(path.basename(file, '.ts')) + '.ts'
     const newFilePath = path.join(projectPath, newFileName)
 
-    await updateAllImports(projectPath, oldFilePath, newFilePath)
+    await updateAllImports(projectPath, oldFilePath, newFilePath, options)
     await fs.promises.rename(oldFilePath, newFilePath)
 
-    console.log(`Renamed ${file} to ${newFileName}`)
+    if (!options.dryRun) {
+      console.log(`Renamed ${file} to ${newFileName}`)
+    }
     return true
   }
   return false
 }
 
-async function updateAllImports(projectPath, oldFilePath, newFilePath) {
+async function updateAllImports(projectPath, oldFilePath, newFilePath, options) {
+  const languageService = await createLanguageService(projectPath)
+
+  const oldFile = oldFilePath.replace(projectPath, "")
+  const newFile = newFilePath.replace(projectPath, "")
+  // console.log("Project Path:", projectPath)
+  // console.log(oldFile, newFile)
+  const edits = languageService.getEditsForFileRename(oldFile, newFile, ts.testFormatSettings, ts.emptyOptions);
+  if (options.dryRun) {
+    console.log("********* Dry Run - Edits ************")
+  }
+
+  for (let i=0; i < edits.length; i++) {
+    const { fileName, textChanges } = edits[i];
+    if (options.dryRun) console.log(fileName)
+    const filePath = path.join(projectPath, fileName)
+    if (textChanges && textChanges.length > 0) {
+      const sourceCode = await fs.promises.readFile(filePath, "utf-8"); // Read the existing file content
+      let updatedCode = sourceCode;
+      
+      // Apply the text changes to update the file content
+      textChanges.forEach((change) => {
+        if (options.dryRun) {
+          const substr = updatedCode.substring(change.span.start, change.span.length)
+          console.log(`   Replace ${substr} with ${change.newText}`)
+        }
+        updatedCode = updatedCode.slice(0, change.span.start) + change.newText + updatedCode.slice(change.span.start + change.span.length);
+      });
+
+      // Write the updated content back to the file
+      if (!options.dryRun) {
+        await fs.promises.writeFile(filePath, updatedCode, "utf-8");
+      }
+    }
+  }
+}
+
+async function createLanguageService(projectPath) {
   const tsconfigPath = "tsconfig.json"; // Provide the path to your tsconfig.json file
   const tsconfigText = await fs.promises.readFile(path.join(projectPath, tsconfigPath), "utf-8");
   const { config, error } = ts.parseConfigFileTextToJson(tsconfigPath, tsconfigText);
 
   if (error) {
-    console.error("Error parsing tsconfig.json:", error);
-    process.exit(1);
+    throw error
   }
 
   const compilerOptions = config.compilerOptions;
 
-  const languageService = ts.createLanguageService(
+  return ts.createLanguageService(
     {
       getCompilationSettings: () => compilerOptions,
       getScriptFileNames: () => {
@@ -115,30 +154,4 @@ async function updateAllImports(projectPath, oldFilePath, newFilePath) {
       readFile: ts.sys.readFile
     }
   );
-
-  const oldFile = oldFilePath.replace(projectPath, "")
-  const newFile = newFilePath.replace(projectPath, "")
-  console.log("Project Path:", projectPath)
-  console.log(oldFile, newFile)
-  const edits = languageService.getEditsForFileRename(oldFile, newFile, ts.testFormatSettings, ts.emptyOptions);
-  console.log("********* EDITS ************")
-
-  for (let i=0; i < edits.length; i++) {
-    const { fileName, textChanges } = edits[i];
-    console.log(fileName)
-    console.log(textChanges)
-    const filePath = path.join(projectPath, fileName)
-    if (textChanges && textChanges.length > 0) {
-      const sourceCode = await fs.promises.readFile(filePath, "utf-8"); // Read the existing file content
-      let updatedCode = sourceCode;
-      
-      // Apply the text changes to update the file content
-      textChanges.forEach((change) => {
-        updatedCode = updatedCode.slice(0, change.span.start) + change.newText + updatedCode.slice(change.span.start + change.span.length);
-      });
-
-      // Write the updated content back to the file
-      await fs.promises.writeFile(filePath, updatedCode, "utf-8");
-    }
-  }
 }

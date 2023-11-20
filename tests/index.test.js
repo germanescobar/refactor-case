@@ -3,10 +3,19 @@ import * as url from 'url'
 import refactorFilesCase from '../index.js'
 
 describe('refactor files case', () => {
+  const currentPath = url.fileURLToPath(new URL('.', import.meta.url));
+
+  beforeEach(async () => {
+    await fs.promises.cp(currentPath + '/fixtures', currentPath + '/fixtures-run', { recursive: true })
+  })
+
+  afterEach(async () => {
+    await fs.promises.rm(currentPath + '/fixtures-run', { recursive: true, force: true })
+  })
+
   it('refactors one file', async () => {
     const currentPath = url.fileURLToPath(new URL('.', import.meta.url));
-    await fs.promises.cp(currentPath + '/fixtures', currentPath + '/fixtures-run', { recursive: true })
-    await refactorFilesCase('kebab', currentPath + 'fixtures-run', 'SecondFile.ts')
+    await refactorFilesCase('kebab', currentPath + 'fixtures-run', { path: 'SecondFile.ts' })
 
     const firstFile = await fs.promises.readFile(currentPath + 'fixtures-run/FirstFile.ts', 'utf8')
     expect(firstFile).toContain('import SecondFile from \'./second-file\'')
