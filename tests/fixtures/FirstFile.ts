@@ -1,3 +1,7 @@
 import SecondFile from './SecondFile'
+import ThirdFile from './third-file'
 
-SecondFile()
+SecondFile(5)
+ThirdFile()
+
+export default 5

@@ -8,8 +8,12 @@ import { camelCase, kebabCase, pascalCase, snakeCase } from "change-case";
  * 
  * @param {string} newCase - The case you want to change the files to (camel, snake, kebab, pascal).
  * @param {string} projectPath - The path to the project (absolute or relative).
- * @param {object} options - Options
- * @returns {Promise}
+ * @param {object} options - The options for the refactor, they are all optional:
+ * - path: (string) path to a file or folder, relative to the projectPath. Defaults to "/".
+ * - directory: (boolean) change the name of a directory instead of the files inside (not supported yet). Defaults to false.
+ * - recursive: (boolean) if we want to change the files recursively (not supported yet). Defaults to false
+ * - dryRun: (boolean) show the changes that would occur without actually updating the files.
+ * @returns {Promise} an array of promises that will resolve to true if the change succeeded or false if not.
  */
 export default async function refactorFilesCase(newCase, projectPath, options) {
   const fileOrFolderPath = options.path || '/'
@@ -26,7 +30,7 @@ export default async function refactorFilesCase(newCase, projectPath, options) {
     })
     return Promise.all(promises)
   } else {
-    return refactorFileCase(caseFn, projectPath, fileOrFolderPath, options)
+    return [refactorFileCase(caseFn, projectPath, fileOrFolderPath, options)]
   }
 }
 
@@ -51,7 +55,9 @@ async function refactorFileCase(caseFn, projectPath, file, options) {
     const newFilePath = path.join(projectPath, newFileName)
 
     await updateAllImports(projectPath, oldFilePath, newFilePath, options)
-    await fs.promises.rename(oldFilePath, newFilePath)
+    if (!options.dryRun) {
+      await fs.promises.rename(oldFilePath, newFilePath)
+    }
 
     if (!options.dryRun) {
       console.log(`Renamed ${file} to ${newFileName}`)
@@ -66,8 +72,6 @@ async function updateAllImports(projectPath, oldFilePath, newFilePath, options) 
 
   const oldFile = oldFilePath.replace(projectPath, "")
   const newFile = newFilePath.replace(projectPath, "")
-  // console.log("Project Path:", projectPath)
-  // console.log(oldFile, newFile)
   const edits = languageService.getEditsForFileRename(oldFile, newFile, ts.testFormatSettings, ts.emptyOptions);
   if (options.dryRun) {
     console.log("********* Dry Run - Edits ************")
@@ -99,7 +103,7 @@ async function updateAllImports(projectPath, oldFilePath, newFilePath, options) 
 }
 
 async function createLanguageService(projectPath) {
-  const tsconfigPath = "tsconfig.json"; // Provide the path to your tsconfig.json file
+  const tsconfigPath = "tsconfig.json";
   const tsconfigText = await fs.promises.readFile(path.join(projectPath, tsconfigPath), "utf-8");
   const { config, error } = ts.parseConfigFileTextToJson(tsconfigPath, tsconfigText);
 
@@ -109,35 +113,52 @@ async function createLanguageService(projectPath) {
 
   const compilerOptions = config.compilerOptions;
 
+  const files = [];
   return ts.createLanguageService(
     {
       getCompilationSettings: () => compilerOptions,
       getScriptFileNames: () => {
-        const files = [];
         function visitDirectory(directory) {
-          const entries = fs.readdirSync(directory);
-          for (const entry of entries) {
-            const fullPath = path.join(directory, entry);
-            if (fs.statSync(fullPath).isDirectory()) {
-              visitDirectory(fullPath);
-            } else if (entry.endsWith(".ts") || entry.endsWith(".js")) {
-              const path = fullPath.replace(projectPath, "")
-              files.push(path);
+          if (!directory.includes("node_modules")) {
+            const entries = fs.readdirSync(directory);
+            for (const entry of entries) {
+              const fullPath = path.join(directory, entry);
+              if (fs.statSync(fullPath).isDirectory()) {
+                visitDirectory(fullPath);
+              } else if (entry.endsWith(".ts") || entry.endsWith(".js")) {
+                const path = fullPath.replace(projectPath, "")
+                files.push(path);
+              }
             }
           }
         }
-        visitDirectory(projectPath);
+        if (files.length === 0) {
+          visitDirectory(projectPath);
+        }
+
         return files;
       }, 
       getScriptVersion: (fileName) => {
-        if (!fileName.includes("node_modules")) {
+        // console.log("getScriptVersion fileName", fileName)
+        if (fileName.includes("node_modules")) {
+          return Date.now()
+        }
+        if (!fileName.includes("node_modules") && !fileName.startsWith(projectPath)) {
           fileName = path.join(projectPath, fileName)
         }
-        return fs.statSync(fileName).mtime.getTime().toString();
+        try {
+          return fs.statSync(fileName).mtime.getTime().toString();
+        } catch (error) {
+          console.error("Error inspecting file:", fileName, error);
+          return Date.now()
+        }
       },
       getScriptSnapshot: (fileName) => {
+        if (fileName.includes("node_modules")) {
+          return ts.ScriptSnapshot.fromString("");
+        }
         try {
-          if (!fileName.includes("node_modules")) {
+          if (!fileName.includes("node_modules") && !fileName.startsWith(projectPath)) {
             fileName = path.join(projectPath, fileName)
           }
           const fileContent = fs.readFileSync(fileName, "utf-8");

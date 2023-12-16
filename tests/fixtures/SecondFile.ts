@@ -1,3 +1,3 @@
-export default () => {
-  console.log('test')
+export default (num: number) => {
+  console.log('test' + num)
 }

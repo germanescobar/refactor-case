@@ -26,4 +26,12 @@ describe('refactor files case', () => {
     const fourthFile = await fs.promises.readFile(currentPath + 'fixtures-run/inner/fourthFile.ts', 'utf8')
     expect(fourthFile).toContain('import SecondFile from \'../second-file\'')
   })
+
+  it ('refactors all files from a folder', () => {
+
+  })
+
+  it ('doesn\'t alters files on a dry run', () => {
+    
+  })
 })
