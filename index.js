@@ -116,6 +116,7 @@ async function createLanguageService(projectPath) {
   compilerOptions.moduleResolution =  ts.ModuleResolutionKind.Node16
 
   const files = [];
+  const snapshots = {}
   return ts.createLanguageService(
     {
       getCompilationSettings: () => compilerOptions,
@@ -141,7 +142,6 @@ async function createLanguageService(projectPath) {
         return files;
       }, 
       getScriptVersion: (fileName) => {
-        // console.log("getScriptVersion fileName", fileName)
         if (fileName.includes("node_modules")) {
           return Date.now()
         }
@@ -156,6 +156,9 @@ async function createLanguageService(projectPath) {
         }
       },
       getScriptSnapshot: (fileName) => {
+        if (snapshots[fileName]) {
+          return snapshots[fileName];
+        }
         if (fileName.includes("node_modules")) {
           return ts.ScriptSnapshot.fromString("");
         }
@@ -165,6 +168,7 @@ async function createLanguageService(projectPath) {
           }
           const fileContent = fs.readFileSync(fileName, "utf-8");
           const snapshot = ts.ScriptSnapshot.fromString(fileContent);
+          snapshots[fileName] = snapshot
           return snapshot;
         } catch (error) {
           console.error("Error reading file:", fileName, error);
