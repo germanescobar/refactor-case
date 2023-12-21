@@ -2,10 +2,10 @@
 
 This tool let's you change the case of file names and update the imports accordingly in TypeScript or JavaScript projects. Supported cases are:
 
-* kebab: this-is-an-example
-* camel: thisIsAnExample
-* pascal: ThisIsAnExample
-* snake: this_is_an_example
+* `kebab` (this-is-an-example)
+* `camel` (thisIsAnExample)
+* `pascal` (ThisIsAnExample)
+* `snake` (this_is_an_example)
 
 You can do this programmatically or using the CLI.
 
