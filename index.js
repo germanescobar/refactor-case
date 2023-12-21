@@ -30,7 +30,7 @@ export default async function refactorFilesCase(newCase, projectPath, options) {
     })
     return Promise.all(promises)
   } else {
-    return [refactorFileCase(caseFn, projectPath, fileOrFolderPath, options)]
+    return [await refactorFileCase(caseFn, projectPath, fileOrFolderPath, options)]
   }
 }
 
@@ -48,11 +48,12 @@ function getCaseFn(newCase) {
   throw new Error(`Case "${newCase}" is not valid, possible values are: camel, snake, kebab, pascal`)
 }
 
-async function refactorFileCase(caseFn, projectPath, file, options) {
-  if (file.endsWith('.ts')) {
-    const oldFilePath = path.join(projectPath, file)
-    const newFileName = caseFn(path.basename(file, '.ts')) + '.ts'
-    const newFilePath = path.join(projectPath, newFileName)
+async function refactorFileCase(caseFn, projectPath, fileName, options) {
+  if (fileName.endsWith('.ts')) {
+    const oldFilePath = path.join(projectPath, fileName)
+    const fileDir = path.dirname(oldFilePath)
+    const newFileName = caseFn(path.basename(fileName, '.ts')) + '.ts'
+    const newFilePath = path.join(fileDir, newFileName)
 
     await updateAllImports(projectPath, oldFilePath, newFilePath, options)
     if (!options.dryRun) {
@@ -60,7 +61,7 @@ async function refactorFileCase(caseFn, projectPath, file, options) {
     }
 
     if (!options.dryRun) {
-      console.log(`Renamed ${file} to ${newFileName}`)
+      console.log(`Renamed ${fileName} to ${newFilePath.replace(projectPath, "")}`)
     }
     return true
   }
@@ -77,8 +78,8 @@ async function updateAllImports(projectPath, oldFilePath, newFilePath, options) 
     console.log("********* Dry Run - Edits ************")
   }
 
-  for (let i=0; i < edits.length; i++) {
-    const { fileName, textChanges } = edits[i];
+  for (const element of edits) {
+    const { fileName, textChanges } = element;
     if (options.dryRun) console.log(fileName)
     const filePath = path.join(projectPath, fileName)
     if (textChanges && textChanges.length > 0) {
@@ -112,6 +113,7 @@ async function createLanguageService(projectPath) {
   }
 
   const compilerOptions = config.compilerOptions;
+  compilerOptions.moduleResolution =  ts.ModuleResolutionKind.Node16
 
   const files = [];
   return ts.createLanguageService(

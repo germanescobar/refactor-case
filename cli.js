@@ -22,7 +22,6 @@ async function run() {
     recursive: false,
     dryRun: false
   }
-  console.log(opts)
   if (opts.path) options.path = opts.path
   if (opts.directory) options.directory = true
   if (opts.recursive) options.recursive = true
